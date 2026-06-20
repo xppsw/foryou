@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>片段</title>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: "Noto Serif SC", "Source Han Serif SC", "STSong", "SimSun", "Songti SC", serif;
+    background: #0a0a0f;
+    color: #e8e0d0;
+    min-height: 100vh;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #stars-canvas {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 0;
+    opacity: 0; transition: opacity 1.5s ease;
+  }
+  #stars-canvas.visible { opacity: 1; }
+  #stars-canvas.fade { opacity: 0; }
+
+  /* ===== 密码页面 ===== */
+  #password-screen {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100; background: rgba(10,10,15,0.95);
+    flex-direction: column; gap: 28px;
+    transition: opacity 0.8s ease, visibility 0.8s ease;
+  }
+  #password-screen.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+  #password-screen .moon-icon {
+    font-size: 56px; animation: float 3s ease-in-out infinite;
+  }
+  @keyframes float {
+    0%,100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+  #password-screen .title {
+    font-size: 20px; letter-spacing: 8px; color: #d4c8b8; font-weight: 400;
+  }
+  #pin-container {
+    display: flex; gap: 10px; justify-content: center;
+  }
+  .pin-box {
+    width: 40px; height: 48px;
+    background: rgba(232,224,208,0.04);
+    border: 1px solid rgba(232,224,208,0.25);
+    border-radius: 3px;
+    color: #e8e0d0; font-size: 20px; font-family: inherit;
+    text-align: center; caret-color: transparent;
+    outline: none; transition: border-color 0.3s, background 0.3s;
+  }
+  .pin-box:focus { border-color: rgba(232,224,208,0.6); background: rgba(232,224,208,0.08); }
+  .pin-box.filled { border-color: rgba(232,224,208,0.4); }
+  #password-hint {
+    font-size: 13px; color: rgba(232,224,208,0.45); text-align: center;
+    letter-spacing: 2px; max-width: 280px; line-height: 1.6;
+  }
+  #password-error {
+    font-size: 13px; color: rgba(220,120,120,0.8); text-align: center;
+    min-height: 20px; transition: opacity 0.3s; opacity: 0;
+  }
+  #password-submit {
+    background: rgba(232,224,208,0.08); border: 1px solid rgba(232,224,208,0.2);
+    color: #d4c8b8; padding: 10px 40px; font-size: 15px;
+    cursor: pointer; letter-spacing: 4px; font-family: inherit;
+    transition: all 0.3s; border-radius: 2px;
+  }
+  #password-submit:hover { background: rgba(232,224,208,0.15); border-color: rgba(232,224,208,0.4); }
+
+  /* ===== 主内容页面 ===== */
+  #main-screen {
+    position: fixed; inset: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column;
+    opacity: 0; visibility: hidden;
+    transition: opacity 0.8s ease, visibility 0.8s ease;
+  }
+  #main-screen.visible { opacity: 1; visibility: visible; }
+
+  #content-area {
+    position: relative; z-index: 20;
+    max-width: 660px; width: 88%;
+    display: flex; flex-direction: column; align-items: center;
+    gap: 48px;
+  }
+  #sentence-container {
+    width: 100%; min-height: 160px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; padding: 24px 16px;
+  }
+  #sentence {
+    font-size: clamp(17px, 3.2vw, 23px);
+    line-height: 2.0; letter-spacing: 2.5px;
+    text-align: center; color: #e0d8c8;
+    transition: opacity 0.4s ease, transform 0.4s ease;
+    opacity: 1; transform: translateY(0);
+  }
+  #sentence.fade-out { opacity: 0; transform: translateY(-14px); }
+
+  /* 轻点提示 */
+  #click-hint {
+    font-size: 13px; letter-spacing: 3px;
+    color: rgba(232,224,208,0.55);
+    animation: hintPulse 2.5s ease-in-out infinite;
+    pointer-events: none; text-align: center;
+    transition: opacity 0.6s ease;
+  }
+  #click-hint.gone { opacity: 0; animation: none; }
+  @keyframes hintPulse {
+    0%,100% { opacity: 0.25; }
+    50% { opacity: 0.7; }
+  }
+
+  /* 进度点 */
+  #dots {
+    display: flex; gap: 7px; flex-wrap: wrap;
+    justify-content: center; max-width: 90%;
+  }
+  .dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: rgba(232,224,208,0.2); transition: all 0.4s;
+  }
+  .dot.active { background: rgba(232,224,208,0.75); width: 6px; height: 6px; }
+  .dot.past { background: rgba(232,224,208,0.4); }
+
+  #prev-btn {
+    position: fixed; bottom: 36px; left: 28px; z-index: 30;
+    background: rgba(232,224,208,0.05); border: 1px solid rgba(232,224,208,0.12);
+    color: rgba(232,224,208,0.6); padding: 9px 16px;
+    font-size: 13px; letter-spacing: 2px; font-family: inherit;
+    cursor: pointer; border-radius: 2px;
+    transition: all 0.3s; display: flex; align-items: center; gap: 5px;
+  }
+  #prev-btn:hover { background: rgba(232,224,208,0.1); color: rgba(232,224,208,0.85); }
+  #prev-btn.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+
+  #music-controls {
+    position: fixed; top: 20px; right: 20px; z-index: 30;
+    display: flex; align-items: center; gap: 8px;
+    opacity: 0; visibility: hidden; transition: all 0.3s;
+  }
+  #music-controls.visible { opacity: 1; visibility: visible; }
+  #music-btn {
+    width: 34px; height: 34px; background: rgba(232,224,208,0.05);
+    border: 1px solid rgba(232,224,208,0.15); border-radius: 50%;
+    color: rgba(232,224,208,0.65); font-size: 13px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: all 0.3s; font-family: inherit; flex-shrink: 0;
+  }
+  #music-btn:hover { background: rgba(232,224,208,0.1); }
+  #music-btn.paused { opacity: 0.45; }
+  #volume-slider {
+    -webkit-appearance: none; appearance: none;
+    width: 60px; height: 3px; background: rgba(232,224,208,0.2);
+    border-radius: 2px; outline: none; cursor: pointer;
+  }
+  #volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: rgba(232,224,208,0.7); cursor: pointer; border: none;
+  }
+  #volume-slider::-moz-range-thumb {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: rgba(232,224,208,0.7); cursor: pointer; border: none;
+  }
+
+  /* ===== 结局页面 — 亮色少女风 ===== */
+  #ending-screen {
+    position: fixed; inset: 0; z-index: 200;
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column;
+    opacity: 0; visibility: hidden; pointer-events: none;
+    transition: opacity 1s ease, visibility 1s ease;
+    background: linear-gradient(160deg, #fffaf7 0%, #fef5f0 20%, #fdf0ee 50%, #fef8f5 80%, #fffaf7 100%);
+    gap: 20px;
+    padding: 40px 24px;
+  }
+  #ending-screen.visible { opacity: 1; visibility: visible; pointer-events: auto; }
+
+  #ending-screen .heart-deco {
+    position: absolute; pointer-events: none; opacity: 0.06;
+  }
+  #ending-screen .heart-deco:nth-child(1) { top: 10%; left: 12%; font-size: 80px; transform: rotate(-15deg); }
+  #ending-screen .heart-deco:nth-child(2) { top: 8%; right: 10%; font-size: 60px; transform: rotate(20deg); }
+  #ending-screen .heart-deco:nth-child(3) { bottom: 15%; left: 15%; font-size: 70px; transform: rotate(10deg); }
+  #ending-screen .heart-deco:nth-child(4) { bottom: 12%; right: 14%; font-size: 90px; transform: rotate(-10deg); }
+
+  #ending-screen .kaomoji {
+    font-size: 60px; margin-bottom: 8px; animation: float 3s ease-in-out infinite;
+    position: relative; z-index: 1;
+    color: #c97a7a; text-shadow: 0 2px 8px rgba(200,130,120,0.15);
+  }
+  #ending-screen .ending-text {
+    font-size: clamp(16px, 3vw, 20px); letter-spacing: 3px;
+    color: #d4a8a0; text-align: center; position: relative; z-index: 1;
+    margin-bottom: 12px;
+  }
+  #ending-screen .ending-link {
+    display: inline-block; padding: 14px 36px;
+    background: #f8e0d8; color: #b87a6e;
+    border-radius: 30px; font-size: 15px; letter-spacing: 2px;
+    text-decoration: none; font-family: inherit;
+    border: 1px solid rgba(200,140,120,0.2);
+    transition: all 0.3s; position: relative; z-index: 1;
+  }
+  #ending-screen .ending-link:hover {
+    background: #f5d0c5; transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(200,150,130,0.15);
+  }
+  #ending-screen .ending-sub {
+    font-size: 12px; color: #d0b8b0; letter-spacing: 2px;
+    text-align: center; position: relative; z-index: 1;
+  }
+
+  @media (max-width: 600px) {
+    .pin-box { width: 36px; height: 44px; font-size: 18px; }
+    #pin-container { gap: 8px; }
+    #prev-btn { bottom: 26px; left: 14px; padding: 8px 13px; font-size: 12px; letter-spacing: 1px; }
+    #sentence { font-size: 16px; letter-spacing: 2px; }
+    #music-controls { top: 14px; right: 14px; }
+    #volume-slider { width: 46px; }
+    #content-area { width: 92%; gap: 36px; }
+    #ending-screen .kaomoji { font-size: 38px; }
+    #ending-screen .ending-text { font-size: 15px; }
+    #ending-screen .ending-link { padding: 12px 28px; font-size: 14px; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="stars-canvas"></canvas>
+
+<!-- ===== 密码页面 ===== -->
+<div id="password-screen">
+  <div class="moon-icon">🌙</div>
+  <div class="title">片 段</div>
+  <div id="pin-container">
+    <input type="password" class="pin-box" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+    <input type="password" class="pin-box" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+    <input type="password" class="pin-box" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+    <input type="password" class="pin-box" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+    <input type="password" class="pin-box" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+    <input type="password" class="pin-box" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+  </div>
+  <div id="password-hint">关于你，我记了最久的一组数字</div>
+  <div id="password-error"></div>
+  <button id="password-submit">进 入</button>
+</div>
+
+<!-- ===== 主内容 ===== -->
+<div id="main-screen">
+  <div id="content-area">
+    <div id="click-hint">轻点屏幕继续</div>
+    <div id="sentence-container">
+      <div id="sentence"></div>
+    </div>
+    <div id="dots"></div>
+  </div>
+</div>
+
+<button id="prev-btn" class="hidden">← 上一句</button>
+
+<div id="music-controls">
+  <button id="music-btn">♫</button>
+  <input type="range" id="volume-slider" min="0" max="100" value="50">
+</div>
+
+<!-- ===== 结局页面 ===== -->
+<div id="ending-screen">
+  <div class="heart-deco">💕</div>
+  <div class="heart-deco">💗</div>
+  <div class="heart-deco">💖</div>
+  <div class="heart-deco">💝</div>
+  <div class="kaomoji">(/&gt;///&lt;)/</div>
+  <div class="ending-text">先别走！这里还有一篇</div>
+  <a id="ending-link" class="ending-link" href="#" target="_blank">点我打开</a>
+  <div class="ending-sub">（等等还有哦）</div>
+</div>
+
+<script>
+// ===== 星空 + 月亮（左上）+ 萤火虫 =====
+(function() {
+  const canvas = document.getElementById('stars-canvas');
+  const ctx = canvas.getContext('2d');
+  let stars = [], fireflies = [];
+  let w, h, time = 0;
+
+  const moon = { x: 0, y: 0, r: 0 };
+
+  function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+    // 月亮在左上方
+    moon.x = w * 0.18;
+    moon.y = h * 0.16;
+    moon.r = Math.min(w, h) * 0.075;
+    initStars();
+  }
+
+  function initStars() {
+    const count = Math.floor(w * h / 3200);
+    stars = [];
+    for (let i = 0; i < count; i++) {
+      stars.push({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        r: Math.random() * 1.4 + 0.3,
+        twinkle: Math.random() * Math.PI * 2,
+        speed: Math.random() * 0.012 + 0.004,
+        opacity: Math.random() * 0.5 + 0.4
+      });
+    }
+  }
+
+  function spawnFirefly() {
+    if (fireflies.length > 16) return;
+    fireflies.push({
+      x: Math.random() * w,
+      y: h + 10,
+      r: Math.random() * 2 + 1.2,
+      speed: Math.random() * 0.4 + 0.15,
+      sway: Math.random() * 0.6 - 0.3,
+      life: 1,
+      decay: Math.random() * 0.003 + 0.002,
+      hue: 30 + Math.random() * 20
+    });
+  }
+
+  function drawMoon() {
+    const mx = moon.x, my = moon.y, mr = moon.r;
+
+    // 月光 — 从月球轮廓向右下（文字区域方向）散射
+    // 多层径向渐变，偏移中心向右下
+    for (let i = 3; i >= 0; i--) {
+      const alpha = [0.04, 0.06, 0.09, 0.14][i];
+      const rx = mr * [5, 3.5, 2.2, 1.3][i];
+      const ry = mr * [4.5, 3.2, 2.0, 1.2][i];
+      const ox = mx + mr * [1.8, 1.2, 0.5, 0.1][i];
+      const oy = my + mr * [1.5, 1.0, 0.4, 0.1][i];
+      const grad = ctx.createRadialGradient(mx, my, mr * 0.4, ox, oy, rx);
+      grad.addColorStop(0, `rgba(255,245,225,${alpha * 1.4})`);
+      grad.addColorStop(1, 'rgba(255,240,215,0)');
+      ctx.beginPath();
+      ctx.ellipse(ox, oy, rx, ry, 0.4, 0, Math.PI * 2);
+      ctx.fillStyle = grad;
+      ctx.fill();
+    }
+
+    // 月亮本体
+    const bodyGrad = ctx.createRadialGradient(mx - mr*0.2, my - mr*0.2, mr*0.08, mx, my, mr);
+    bodyGrad.addColorStop(0, '#fffef8');
+    bodyGrad.addColorStop(0.65, '#f5edd8');
+    bodyGrad.addColorStop(1, '#e8dbbe');
+    ctx.beginPath();
+    ctx.arc(mx, my, mr, 0, Math.PI * 2);
+    ctx.fillStyle = bodyGrad;
+    ctx.fill();
+  }
+
+  function drawFireflies() {
+    for (const f of fireflies) {
+      const grad = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.r*3);
+      grad.addColorStop(0, `hsla(${f.hue},60%,80%,${f.life*0.85})`);
+      grad.addColorStop(0.5, `hsla(${f.hue},50%,70%,${f.life*0.3})`);
+      grad.addColorStop(1, `hsla(${f.hue},40%,60%,0)`);
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, f.r*3, 0, Math.PI*2);
+      ctx.fillStyle = grad;
+      ctx.fill();
+    }
+  }
+
+  function updateFireflies() {
+    for (let i = fireflies.length-1; i >= 0; i--) {
+      const f = fireflies[i];
+      f.y -= f.speed;
+      f.x += f.sway + Math.sin(time*0.02 + f.x*0.01)*0.3;
+      f.life -= f.decay;
+      if (f.life <= 0 || f.y < -20) fireflies.splice(i, 1);
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, w, h);
+    time++;
+    drawMoon();
+    for (const s of stars) {
+      s.twinkle += s.speed;
+      const alpha = s.opacity * (0.6 + 0.4*Math.sin(s.twinkle));
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+      ctx.fillStyle = `rgba(255,245,230,${alpha})`;
+      ctx.fill();
+      if (Math.sin(s.twinkle) > 0.85) {
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r*2.2, 0, Math.PI*2);
+        ctx.fillStyle = `rgba(255,220,180,${alpha*0.12})`;
+        ctx.fill();
+      }
+    }
+    updateFireflies();
+    drawFireflies();
+    if (Math.random() < 0.025) spawnFirefly();
+    requestAnimationFrame(draw);
+  }
+
+  window.addEventListener('resize', resize);
+  resize();
+  draw();
+})();
+
+// ===== 句子数据 =====
+const sentences = [
+  "我觉得时间过得真的很快，我喜欢上的16岁的妳，似乎马上就要20岁了，而我害怕未来，我怕我就算爱上妳，也就只有短短几十年。我希望我刚出生时就能与妳相恋。因为这样我就能爱妳一辈子了。",
+  "我太喜欢妳了，以至于我不敢看妳...",
+  "看到妳的名字会心动，其实也是一件很幸福的事",
+  "喜欢妳直发的样子，喜欢妳卷发的样子，喜欢妳散发的样子，喜欢妳扎马尾的样子，怎么样的妳我都很喜欢，不过我最喜欢妳笑着的样子",
+  "时光要是能倒流就好了，我想回到没有认识妳的那个闷热夏天",
+  "不知不觉的我的生活好像不能没有妳，我满眼都是妳，我的未来也都是妳",
+  "不想和妳分开，如果可以的话，我希望每天都能坐在教室的角落默默注视着妳。如果可以的话，我想每天都如第一次见到妳时一样暗恋着妳",
+  "可惜我太过青涩，没能好好的了解妳，也没能让妳好好的了解我",
+  "如果能一直默默的看着妳就好了",
+  "因为我不够优秀，所以在妳看过来的时候我会慌张的躲开",
+  "如果我能好好的爱妳就好了",
+  "“喜欢妳大概是这个世界上，最独断最没有道理的事了。”",
+  "人总是会抓住一些希望，哪怕虚无缥缈。谢谢妳出现在我最迷茫的时候",
+  "希望妳能慢一点爱上别人，起码在我离开之后",
+  "比起妳可爱的脸，我更熟悉的是妳的背影",
+  "我会在晚自习上课前慢慢从外面走上楼，因为在那能看到妳的侧脸",
+  "我只是，一直在追着妳的影子，但稍稍不留意，我就被留在了原地",
+  "妳是我平平人生中的第一个读者",
+  "我在楼梯上望着妳，夕阳洒在妳的脸上，好像夕阳也会为了月亮流泪",
+  "喜欢妳莫过于世界上最美好的事",
+  "今天听了甜甜的歌，想到了妳甜甜的笑",
+  "想和妳在余晖落日时接吻，想同妳在落日晚风中相拥，想看妳清晨时惺忪的睡眼，想听妳夜深时亲昵的呼吸",
+  "感觉妳走路的样子都好自信，有点帅帅的",
+  "像个小朋友一样蹦蹦跳跳的，好可爱，好幸运能在周末看到妳",
+  "妳好厉害呀，软软的，女孩子真的都是水做的",
+  "妳的一切都很有感染力，看到妳可爱的样子都会不自觉的开心起来",
+  "脸蛋红噗噗的真可爱，好想再多看一秒，最可爱了，可是我都不敢光明正大的看妳。只能躲在他们后面偷偷瞥着然后傻笑",
+  "能和妳一起去教室真是太好了，能和妳一起等电梯真是太好了",
+  "我做了一个梦，梦见有好多人也喜欢妳，梦里我急的像只落水的小狗。还好梦醒了，但我还是很害怕别人喜欢上妳，害怕妳会和别人在一起",
+  "我不能阻止妳奔向幸福，不管妳的另一半是谁。",
+  "我只是喜欢妳，不是想要困住妳，不想要让妳为难。我真的很喜欢妳，但好像除了我以外，这件事跟任何人都没有关系",
+  "我不能草率的说爱妳，因为我不能随便的说我爱上了一个我不了解的人，所以我只能看着妳阳光的那面，然后疯狂的喜欢妳",
+  "希望时间过得再慢些",
+  "我不知道你知不知道我喜欢妳，我想你应该是知道的吧，所以，就这样了。",
+  "张苔月，我喜欢妳。"
+];
+
+const CORRECT_PASSWORD = "061202";
+
+// ===== DOM =====
+const passwordScreen = document.getElementById('password-screen');
+const pinBoxes = document.querySelectorAll('.pin-box');
+const passwordError = document.getElementById('password-error');
+const passwordSubmit = document.getElementById('password-submit');
+const mainScreen = document.getElementById('main-screen');
+const sentenceEl = document.getElementById('sentence');
+const prevBtn = document.getElementById('prev-btn');
+const musicControls = document.getElementById('music-controls');
+const musicBtn = document.getElementById('music-btn');
+const volumeSlider = document.getElementById('volume-slider');
+const clickHint = document.getElementById('click-hint');
+const dotsContainer = document.getElementById('dots');
+const endingScreen = document.getElementById('ending-screen');
+const endingLink = document.getElementById('ending-link');
+const starsCanvas = document.getElementById('stars-canvas');
+
+// ===== PIN 输入 =====
+pinBoxes.forEach((box, idx) => {
+  box.addEventListener('input', function() {
+    const v = this.value.replace(/[^0-9]/g, '');
+    this.value = v ? v.slice(-1) : '';
+    if (v && idx < pinBoxes.length-1) pinBoxes[idx+1].focus();
+    this.classList.toggle('filled', !!v);
+  });
+  box.addEventListener('keydown', function(e) {
+    if (e.key === 'Backspace' && !this.value && idx > 0) {
+      pinBoxes[idx-1].focus(); pinBoxes[idx-1].value = '';
+      pinBoxes[idx-1].classList.remove('filled');
+    }
+    if (e.key === 'Enter') checkPassword();
+  });
+  box.addEventListener('focus', function() { this.select(); });
+  box.addEventListener('touchstart', function() { this.focus(); });
+});
+
+function getPinValue() {
+  let v = '';
+  pinBoxes.forEach(b => v += b.value);
+  return v;
+}
+passwordSubmit.addEventListener('click', checkPassword);
+
+// ===== 音乐 =====
+let audio = null;
+function initAudio() {
+  audio = new Audio('music.mp3');
+  audio.loop = true;
+  audio.volume = volumeSlider.value/100;
+  musicControls.classList.add('visible');
+  audio.play().then(() => musicBtn.classList.remove('paused'))
+    .catch(() => musicBtn.classList.add('paused'));
+}
+function toggleMusic() {
+  if (!audio) return;
+  if (audio.paused) {
+    audio.play().then(() => musicBtn.classList.remove('paused')).catch(() => {});
+  } else { audio.pause(); musicBtn.classList.add('paused'); }
+}
+musicBtn.addEventListener('click', toggleMusic);
+volumeSlider.addEventListener('input', function() {
+  if (audio) audio.volume = this.value/100;
+});
+
+// ===== 密码 =====
+function checkPassword() {
+  if (getPinValue() === CORRECT_PASSWORD) {
+    passwordError.style.opacity = '0';
+    passwordScreen.classList.add('hidden');
+    mainScreen.classList.add('visible');
+    starsCanvas.classList.add('visible');
+    initAudio();
+    showSentence(0);
+  } else {
+    passwordError.textContent = '密码不对哦，再想想';
+    passwordError.style.opacity = '1';
+    pinBoxes.forEach(b => { b.value = ''; b.classList.remove('filled'); });
+    pinBoxes[0].focus();
+  }
+}
+
+// ===== 句子导航 =====
+let currentIndex = 0;
+let hintDismissed = false;
+
+for (let i = 0; i < sentences.length; i++) {
+  const dot = document.createElement('span');
+  dot.className = 'dot';
+  dotsContainer.appendChild(dot);
+}
+const dots = dotsContainer.querySelectorAll('.dot');
+
+function dismissHint() {
+  if (!hintDismissed) {
+    hintDismissed = true;
+    clickHint.classList.add('gone');
+  }
+}
+
+function showSentence(index) {
+  currentIndex = index;
+  sentenceEl.classList.add('fade-out');
+  setTimeout(() => {
+    sentenceEl.textContent = sentences[index];
+    sentenceEl.classList.remove('fade-out');
+  }, 300);
+
+  dots.forEach((d, i) => {
+    d.classList.remove('active', 'past');
+    if (i < index) d.classList.add('past');
+    if (i === index) d.classList.add('active');
+  });
+
+  prevBtn.classList.toggle('hidden', index === 0);
+}
+
+// 点击 → 下一句 / 结局
+sentenceEl.addEventListener('click', function(e) {
+  e.stopPropagation();
+  dismissHint();
+  nextOrEnd();
+});
+
+document.getElementById('sentence-container').addEventListener('click', function() {
+  dismissHint();
+  nextOrEnd();
+});
+
+document.getElementById('main-screen').addEventListener('click', function(e) {
+  if (e.target === mainScreen) { dismissHint(); nextOrEnd(); }
+});
+
+function nextOrEnd() {
+  if (currentIndex < sentences.length - 1) {
+    showSentence(currentIndex + 1);
+  } else {
+    // 最后一句话读完 → 切入结局
+    showEnding();
+  }
+}
+
+prevBtn.addEventListener('click', function(e) {
+  e.stopPropagation();
+  if (currentIndex > 0) showSentence(currentIndex - 1);
+});
+
+// ===== 结局页面 =====
+function showEnding() {
+  // 音乐渐弱
+  if (audio && !audio.paused) {
+    let vol = audio.volume;
+    const fadeStep = vol / 30;
+    const fadeInterval = setInterval(() => {
+      vol = Math.max(0, vol - fadeStep);
+      audio.volume = vol;
+      if (vol <= 0) { clearInterval(fadeInterval); audio.pause(); }
+    }, 50);
+  }
+
+  // 淡出暗色元素
+  mainScreen.style.opacity = '0';
+  mainScreen.style.visibility = 'hidden';
+  prevBtn.classList.add('hidden');
+  starsCanvas.classList.add('fade');
+  musicControls.style.opacity = '0';
+  musicControls.style.visibility = 'hidden';
+
+  // 淡入亮色结局
+  setTimeout(() => {
+    endingScreen.classList.add('visible');
+  }, 400);
+}
+
+// 结局链接占位（第二站做好后替换）
+endingLink.href = '#';
+
+// ===== 初始化 =====
+pinBoxes[0].focus();
+</script>
+
+</body>
+</html>
