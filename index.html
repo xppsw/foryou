@@ -513,7 +513,7 @@ passwordSubmit.addEventListener('click', checkPassword);
 // ===== 音乐 =====
 let audio = null;
 function initAudio() {
-  audio = new Audio('music.mp3');
+  audio = new Audio('https://pub-062cd22d0ea64348a193ad666086c28f.r2.dev/music.mp3');
   audio.loop = true;
   audio.volume = 0;
   audio.preload = 'auto';
@@ -525,22 +525,17 @@ function initAudio() {
   audio.play().catch(() => {});
   let startedPlaying = false;
 
-  // ── 缓冲够了开始渐入 ──
-  let loaded = false;
-  audio.addEventListener('canplay', () => {
-    if (loaded) return;
-    loaded = true;
-    musicBtn.classList.remove('loading');
-    audio.play().then(() => { startedPlaying = true; }).catch(() => {});
-    const target = volumeSlider.value/100;
-    let v = 0;
-    const step = Math.max(target / 30, 0.005);
-    const fadeIn = setInterval(() => {
-      v = Math.min(target, v + step);
-      audio.volume = v;
-      if (v >= target) { clearInterval(fadeIn); musicBtn.classList.remove('paused'); }
-    }, 50);
-  }, { once: true });
+  // ── 不等缓冲，直接渐入 ──
+  musicBtn.classList.remove('loading');
+  audio.play().then(() => { startedPlaying = true; }).catch(() => {});
+  const target = volumeSlider.value/100;
+  let v = 0;
+  const step = Math.max(target / 30, 0.005);
+  const fadeIn = setInterval(() => {
+    v = Math.min(target, v + step);
+    audio.volume = v;
+    if (v >= target) { clearInterval(fadeIn); musicBtn.classList.remove('paused'); }
+  }, 50);
 
   // ── 中途缓冲耗尽 → 浏览器自动暂停/恢复 ──
   audio.addEventListener('waiting', () => {
@@ -559,7 +554,7 @@ function initAudio() {
   audio.load();
 
   // 后台预下载完整文件到 Blob 缓存（下次访问秒播）
-  fetch('music.mp3').then(r => r.blob()).then(blob => {
+  fetch('https://pub-062cd22d0ea64348a193ad666086c28f.r2.dev/music.mp3').then(r => r.blob()).then(blob => {
     URL.createObjectURL(blob); // 热身，下次直接命中浏览器缓存
   }).catch(() => {});
 }
