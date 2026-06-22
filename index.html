@@ -157,7 +157,7 @@
   }
   #music-btn:hover { background: rgba(232,224,208,0.1); }
   #music-btn.paused { opacity: 0.45; }
-  #music-btn.loading { opacity: 0.6; animation: music-pulse 0.8s ease-in-out infinite; }
+  #music-btn.loading { opacity: 0.6; animation: music-pulse 0.8s ease-in-out infinite; }\n  #music-btn.buffering { opacity: 0.7; animation: music-buf 0.5s ease-in-out infinite; }
   @keyframes music-pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.8; } }
   #volume-slider {
     -webkit-appearance: none; appearance: none;
@@ -513,14 +513,13 @@ function initAudio() {
   audio.crossOrigin = 'anonymous';
   musicControls.classList.add('visible');
   musicBtn.classList.add('loading');
+  let startedPlaying = false;
 
-  // 等待足够缓冲再播放，避免卡顿
-  let canplayFallback = null;
   const doPlay = () => {
     if (canplayFallback) { clearTimeout(canplayFallback); canplayFallback = null; }
     audio.play().then(() => {
-      musicBtn.classList.remove('paused', 'loading');
-      // 渐入效果
+      startedPlaying = true;
+      musicBtn.classList.remove('paused', 'loading', 'buffering');
       const target = volumeSlider.value/100;
       let v = 0;
       const step = Math.max(target / 30, 0.005);
@@ -532,17 +531,32 @@ function initAudio() {
     }).catch(() => musicBtn.classList.add('paused'));
   };
 
-  audio.addEventListener('canplay', doPlay, { once: true });
-  // 8 秒超时兜底
-  canplayFallback = setTimeout(() => {
-    audio.removeEventListener('canplay', doPlay);
+  // ── canplay 就开播，10s 兜底 ──
+  let canplayFallback = null;
+  let started = false;
+  const onReady = () => {
+    if (started) return;
+    started = true;
     doPlay();
-  }, 8000);
+  };
+  audio.addEventListener('canplay', onReady, { once: true });
+  canplayFallback = setTimeout(() => { if (!started) onReady(); }, 10000);
+
+  // ── 播放中途缓冲耗尽 → 浏览器自动暂停/恢复，只管状态 ──
+  audio.addEventListener('waiting', () => {
+    if (startedPlaying) musicBtn.classList.add('buffering');
+  });
+  audio.addEventListener('playing', () => {
+    musicBtn.classList.remove('buffering');
+  });
+  audio.addEventListener('suspend', () => {
+    musicBtn.classList.remove('buffering');
+  });
 
   // 错误处理
   audio.addEventListener('error', () => {
     clearTimeout(canplayFallback);
-    musicBtn.classList.remove('loading');
+    musicBtn.classList.remove('loading', 'buffering');
     musicBtn.classList.add('paused');
     console.warn('音乐加载失败');
   }, { once: true });
