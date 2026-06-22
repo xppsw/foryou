@@ -526,15 +526,21 @@ function initAudio() {
 
   // ── 不等缓冲，直接渐入 ──
   musicBtn.classList.remove('loading');
-  audio.play().then(() => { startedPlaying = true; }).catch(() => {});
   const target = volumeSlider.value/100;
   let v = 0;
-  const step = Math.max(target / 30, 0.005);
-  const fadeIn = setInterval(() => {
-    v = Math.min(target, v + step);
+  const startTime = performance.now();
+  const duration = 1500;
+  const fadeIn = () => {
+    const elapsed = performance.now() - startTime;
+    v = Math.min(target, target * (elapsed / duration));
     audio.volume = v;
-    if (v >= target) { clearInterval(fadeIn); musicBtn.classList.remove('paused'); }
-  }, 50);
+    if (v < target) {
+      requestAnimationFrame(fadeIn);
+    } else {
+      musicBtn.classList.remove('paused');
+    }
+  };
+  requestAnimationFrame(fadeIn);
 
   // ── 中途缓冲耗尽 → 浏览器自动暂停/恢复 ──
   audio.addEventListener('waiting', () => {
@@ -549,8 +555,6 @@ function initAudio() {
     musicBtn.classList.add('paused');
     console.warn('音乐加载失败');
   }, { once: true });
-
-  audio.load();
 
   // 后台预下载完整文件到 Blob 缓存（下次访问秒播）
   fetch('https://pub-062cd22d0ea64348a193ad666086c28f.r2.dev/music.mp3').then(r => r.blob()).then(blob => {
