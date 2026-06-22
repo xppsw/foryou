@@ -297,6 +297,13 @@ document.addEventListener('touchmove', function(e) {
   if (e.touches.length > 1) e.preventDefault();
 }, { passive: false });
 
+// ── 密码页就开始预加载音乐 ──
+const preloadAudio = new Audio('https://pub-062cd22d0ea64348a193ad666086c28f.r2.dev/music.mp3');
+preloadAudio.loop = true;
+preloadAudio.volume = 0;
+preloadAudio.preload = 'auto';
+preloadAudio.load();
+
 // ===== 星空 + 月亮（左上）+ 萤火虫 =====
 (function() {
   const canvas = document.getElementById('stars-canvas');
@@ -515,53 +522,40 @@ passwordSubmit.addEventListener('click', checkPassword);
 // ===== 音乐 =====
 let audio = null;
 function initAudio() {
-  audio = new Audio('https://pub-062cd22d0ea64348a193ad666086c28f.r2.dev/music.mp3');
+  // 复用页面加载时就开始预加载的 Audio 元素
+  audio = preloadAudio;
   audio.loop = true;
   audio.volume = 0;
-  audio.preload = 'auto';
   musicControls.classList.add('visible');
-  musicBtn.classList.add('loading');
+  musicBtn.classList.remove('loading');
 
-  // 同步调用 play()（在 checkPassword 点击回调的调用链内，移动端 autoplay 通过）
+  // 同步 play()（在 checkPassword 点击回调链内，移动端通过）
   let startedPlaying = false;
   audio.play().then(() => { startedPlaying = true; }).catch(() => {});
 
-  // ── 不等缓冲，直接渐入 ──
-  musicBtn.classList.remove('loading');
+  // 渐入（1.5s setTimeout）
   const target = volumeSlider.value/100;
-  let v = 0;
-  const startTime = performance.now();
-  const duration = 1500;
-  const fadeIn = () => {
-    const elapsed = performance.now() - startTime;
-    v = Math.min(target, target * (elapsed / duration));
-    audio.volume = v;
-    if (v < target) {
-      requestAnimationFrame(fadeIn);
-    } else {
-      musicBtn.classList.remove('paused');
-    }
+  const steps = 15;
+  let i = 0;
+  const tick = () => {
+    i++;
+    audio.volume = Math.min(target, target * (i / steps));
+    if (i < steps) { setTimeout(tick, 100); }
+    else { musicBtn.classList.remove('paused'); }
   };
-  requestAnimationFrame(fadeIn);
+  tick();
 
-  // ── 中途缓冲耗尽 → 浏览器自动暂停/恢复 ──
+  // 中途缓冲
   audio.addEventListener('waiting', () => {
     if (startedPlaying) musicBtn.classList.add('buffering');
   });
   audio.addEventListener('playing', () => musicBtn.classList.remove('buffering'));
   audio.addEventListener('suspend', () => musicBtn.classList.remove('buffering'));
-
-  // 错误处理
   audio.addEventListener('error', () => {
-    musicBtn.classList.remove('loading', 'buffering');
+    musicBtn.classList.remove('buffering');
     musicBtn.classList.add('paused');
     console.warn('音乐加载失败');
   }, { once: true });
-
-  // 后台预下载完整文件到 Blob 缓存（下次访问秒播）
-  fetch('https://pub-062cd22d0ea64348a193ad666086c28f.r2.dev/music.mp3').then(r => r.blob()).then(blob => {
-    URL.createObjectURL(blob); // 热身，下次直接命中浏览器缓存
-  }).catch(() => {});
 }
 function toggleMusic() {
   if (!audio) return;
@@ -658,15 +652,18 @@ prevBtn.addEventListener('click', function(e) {
 
 // ===== 结局页面 =====
 function showEnding() {
-  // 音乐渐弱
+  // 音乐渐弱（setTimeout，1s）
   if (audio && !audio.paused) {
-    let vol = audio.volume;
-    const fadeStep = vol / 30;
-    const fadeInterval = setInterval(() => {
-      vol = Math.max(0, vol - fadeStep);
-      audio.volume = vol;
-      if (vol <= 0) { clearInterval(fadeInterval); audio.pause(); }
-    }, 50);
+    const startVol = audio.volume;
+    const steps = 10;
+    let i = 0;
+    const tick = () => {
+      i++;
+      audio.volume = Math.max(0, startVol * (1 - i / steps));
+      if (i < steps) { setTimeout(tick, 100); }
+      else { audio.pause(); }
+    };
+    tick();
   }
 
   // 淡出暗色元素
