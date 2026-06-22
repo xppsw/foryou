@@ -503,23 +503,22 @@ function getPinValue() {
 }
 passwordSubmit.addEventListener('click', checkPassword);
 
-// ===== 音乐 =====
+// ===== 音乐（fetch Blob → 零卡顿）=====
 let audio = null;
 function initAudio() {
-  audio = new Audio('music.mp3');
-  audio.loop = true;
-  audio.volume = 0;
-  audio.preload = 'auto';
-  audio.crossOrigin = 'anonymous';
   musicControls.classList.add('visible');
   musicBtn.classList.add('loading');
-  let startedPlaying = false;
 
-  const doPlay = () => {
-    if (canplayFallback) { clearTimeout(canplayFallback); canplayFallback = null; }
+  fetch('music.mp3').then(r => {
+    if (!r.ok) throw new Error('fetch failed');
+    return r.blob();
+  }).then(blob => {
+    const blobUrl = URL.createObjectURL(blob);
+    audio = new Audio(blobUrl);
+    audio.loop = true;
+    audio.volume = 0;
     audio.play().then(() => {
-      startedPlaying = true;
-      musicBtn.classList.remove('paused', 'loading', 'buffering');
+      musicBtn.classList.remove('paused', 'loading');
       const target = volumeSlider.value/100;
       let v = 0;
       const step = Math.max(target / 30, 0.005);
@@ -529,39 +528,11 @@ function initAudio() {
         if (v >= target) clearInterval(fadeIn);
       }, 50);
     }).catch(() => musicBtn.classList.add('paused'));
-  };
-
-  // ── canplay 就开播，10s 兜底 ──
-  let canplayFallback = null;
-  let started = false;
-  const onReady = () => {
-    if (started) return;
-    started = true;
-    doPlay();
-  };
-  audio.addEventListener('canplay', onReady, { once: true });
-  canplayFallback = setTimeout(() => { if (!started) onReady(); }, 10000);
-
-  // ── 播放中途缓冲耗尽 → 浏览器自动暂停/恢复，只管状态 ──
-  audio.addEventListener('waiting', () => {
-    if (startedPlaying) musicBtn.classList.add('buffering');
-  });
-  audio.addEventListener('playing', () => {
-    musicBtn.classList.remove('buffering');
-  });
-  audio.addEventListener('suspend', () => {
-    musicBtn.classList.remove('buffering');
-  });
-
-  // 错误处理
-  audio.addEventListener('error', () => {
-    clearTimeout(canplayFallback);
-    musicBtn.classList.remove('loading', 'buffering');
+  }).catch(() => {
+    musicBtn.classList.remove('loading');
     musicBtn.classList.add('paused');
     console.warn('音乐加载失败');
-  }, { once: true });
-
-  audio.load();
+  });
 }
 function toggleMusic() {
   if (!audio) return;
