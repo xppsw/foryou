@@ -290,10 +290,10 @@
 </div>
 
 <script>
-// 禁止 iOS Safari 双击/捏合缩放
-document.addEventListener('gesturestart', e => e.preventDefault());
-document.addEventListener('gesturechange', e => e.preventDefault());
-document.addEventListener('gestureend', e => e.preventDefault());
+// 禁止 iOS Safari 双击/捏合缩放（gesturestart 在 iOS16+ 已废弃）
+document.addEventListener('touchmove', function(e) {
+  if (e.touches.length > 1) e.preventDefault();
+}, { passive: false });
 
 // ===== 星空 + 月亮（左上）+ 萤火虫 =====
 (function() {
@@ -510,36 +510,58 @@ function getPinValue() {
 }
 passwordSubmit.addEventListener('click', checkPassword);
 
-// ===== 音乐（fetch Blob → 零卡顿）=====
+// ===== 音乐 =====
 let audio = null;
 function initAudio() {
+  audio = new Audio('music.mp3');
+  audio.loop = true;
+  audio.volume = 0;
+  audio.preload = 'auto';
+  audio.crossOrigin = 'anonymous';
   musicControls.classList.add('visible');
   musicBtn.classList.add('loading');
 
-  fetch('music.mp3').then(r => {
-    if (!r.ok) throw new Error('fetch failed');
-    return r.blob();
-  }).then(blob => {
-    const blobUrl = URL.createObjectURL(blob);
-    audio = new Audio(blobUrl);
-    audio.loop = true;
-    audio.volume = 0;
-    audio.play().then(() => {
-      musicBtn.classList.remove('paused', 'loading');
-      const target = volumeSlider.value/100;
-      let v = 0;
-      const step = Math.max(target / 30, 0.005);
-      const fadeIn = setInterval(() => {
-        v = Math.min(target, v + step);
-        audio.volume = v;
-        if (v >= target) clearInterval(fadeIn);
-      }, 50);
-    }).catch(() => musicBtn.classList.add('paused'));
-  }).catch(() => {
+  // 同步调用 play()（在 checkPassword 点击回调的调用链内，移动端 autoplay 通过）
+  audio.play().catch(() => {});
+  let startedPlaying = false;
+
+  // ── 缓冲够了开始渐入 ──
+  let loaded = false;
+  audio.addEventListener('canplay', () => {
+    if (loaded) return;
+    loaded = true;
     musicBtn.classList.remove('loading');
+    audio.play().then(() => { startedPlaying = true; }).catch(() => {});
+    const target = volumeSlider.value/100;
+    let v = 0;
+    const step = Math.max(target / 30, 0.005);
+    const fadeIn = setInterval(() => {
+      v = Math.min(target, v + step);
+      audio.volume = v;
+      if (v >= target) { clearInterval(fadeIn); musicBtn.classList.remove('paused'); }
+    }, 50);
+  }, { once: true });
+
+  // ── 中途缓冲耗尽 → 浏览器自动暂停/恢复 ──
+  audio.addEventListener('waiting', () => {
+    if (startedPlaying) musicBtn.classList.add('buffering');
+  });
+  audio.addEventListener('playing', () => musicBtn.classList.remove('buffering'));
+  audio.addEventListener('suspend', () => musicBtn.classList.remove('buffering'));
+
+  // 错误处理
+  audio.addEventListener('error', () => {
+    musicBtn.classList.remove('loading', 'buffering');
     musicBtn.classList.add('paused');
     console.warn('音乐加载失败');
-  });
+  }, { once: true });
+
+  audio.load();
+
+  // 后台预下载完整文件到 Blob 缓存（下次访问秒播）
+  fetch('music.mp3').then(r => r.blob()).then(blob => {
+    URL.createObjectURL(blob); // 热身，下次直接命中浏览器缓存
+  }).catch(() => {});
 }
 function toggleMusic() {
   if (!audio) return;
