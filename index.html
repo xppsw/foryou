@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="dns-prefetch" href="https://pub-062cd22d0ea64348a193ad666086c28f.r2.dev">
+<link rel="preconnect" href="https://pub-062cd22d0ea64348a193ad666086c28f.r2.dev">
 <title>一篇小小的情话</title>
 <style>
   *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -521,8 +523,8 @@ function initAudio() {
   musicBtn.classList.add('loading');
 
   // 同步调用 play()（在 checkPassword 点击回调的调用链内，移动端 autoplay 通过）
-  audio.play().catch(() => {});
   let startedPlaying = false;
+  audio.play().then(() => { startedPlaying = true; }).catch(() => {});
 
   // ── 不等缓冲，直接渐入 ──
   musicBtn.classList.remove('loading');
